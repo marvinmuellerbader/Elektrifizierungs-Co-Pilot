@@ -1,151 +1,165 @@
-import streamlit as st
+import sys
+import os
+import json
 import pandas as pd
-import math
-from pathlib import Path
+import streamlit as st
+from streamlit.logger import get_logger
+import pydgraph
+import logging
+import uuid
 
-# Set the title and favicon that appear in the Browser's tab bar.
-st.set_page_config(
-    page_title='GDP dashboard',
-    page_icon=':earth_americas:', # This is an emoji shortcode. Could be a URL too.
-)
+# Setzt die Konfiguration der Seite mit Titel und Symbol
+st.set_page_config(page_title="Flottenelektrifizierung", page_icon="🚻", layout="wide")
 
-# -----------------------------------------------------------------------------
-# Declare some useful functions.
+# Initialisiere den Dgraph Client mit Fehlerbehandlung
+def init_dgraph_client():
+    try:
+        client_stub = pydgraph.DgraphClientStub('localhost:9080')
+        client = pydgraph.DgraphClient(client_stub)
+        return client, client_stub
+    except Exception as e:
+        st.error(f"Fehler beim Herstellen der Verbindung zur Dgraph-Datenbank: {e}")
+        return None, None
 
-@st.cache_data
-def get_gdp_data():
-    """Grab GDP data from a CSV file.
+client, client_stub = init_dgraph_client()
 
-    This uses caching to avoid having to read the file every time. If we were
-    reading from an HTTP endpoint instead of a file, it's a good idea to set
-    a maximum age to the cache with the TTL argument: @st.cache_data(ttl='1d')
-    """
+def close_dgraph_client(client_stub):
+    if client_stub:
+        client_stub.close()
 
-    # Instead of a CSV on disk, you could read from an HTTP endpoint here too.
-    DATA_FILENAME = Path(__file__).parent/'data/gdp_data.csv'
-    raw_gdp_df = pd.read_csv(DATA_FILENAME)
+# Funktion zum Speichern der Fahrzeugdaten in der Session State
+def save_vehicle_to_session(vehicle_data):
+    if 'vehicle_list' not in st.session_state:
+        st.session_state['vehicle_list'] = []
+    st.session_state['vehicle_list'].append(vehicle_data)
 
-    MIN_YEAR = 1960
-    MAX_YEAR = 2022
+# Funktion zum Speichern der Routendaten in der Session State
+def save_route_to_session(route_data):
+    if 'routes' not in st.session_state:
+        st.session_state['routes'] = []
+    st.session_state['routes'].append(route_data)
 
-    # The data above has columns like:
-    # - Country Name
-    # - Country Code
-    # - [Stuff I don't care about]
-    # - GDP for 1960
-    # - GDP for 1961
-    # - GDP for 1962
-    # - ...
-    # - GDP for 2022
-    #
-    # ...but I want this instead:
-    # - Country Name
-    # - Country Code
-    # - Year
-    # - GDP
-    #
-    # So let's pivot all those year-columns into two: Year and GDP
-    gdp_df = raw_gdp_df.melt(
-        ['Country Code'],
-        [str(x) for x in range(MIN_YEAR, MAX_YEAR + 1)],
-        'Year',
-        'GDP',
-    )
+# Funktion zum Löschen von Fahrzeugdaten aus der Session State
+def delete_vehicle_from_session(index):
+    if 'vehicle_list' in st.session_state and len(st.session_state['vehicle_list']) > index:
+        st.session_state['vehicle_list'].pop(index)
 
-    # Convert years from string to integers
-    gdp_df['Year'] = pd.to_numeric(gdp_df['Year'])
+# Hauptfunktion der App
+def run():
+    st.title("Fahrzeugdaten")
 
-    return gdp_df
+    if not client:
+        st.error("Dgraph-Client konnte nicht initialisiert werden. Bitte überprüfen Sie die Verbindung zur Datenbank.")
+        return
 
-gdp_df = get_gdp_data()
+    # Initialisiere Session State für Fahrzeuge und Routen
+    if 'vehicle_data' not in st.session_state:
+        st.session_state['vehicle_data'] = {
+            'vehicle_id': str(uuid.uuid4()),
+            'name': "",
+            'zul_gesamtgew': 0.0,
+            'max_zuladung': 0.0,
+            'kaufpreis': 0.0,
+            'progn_restwert': 0.0,
+            'gepl_laufzeit': 0.0,
+            'versicherungskosten': 0.0,
+            'kraftfahrzeugsteuer': 0.0,
+            'wartungskosten': 0.0,
+            'mautkosten': 0.0,
+            'dgraph.type': 'Vehicle'
+        }
 
-# -----------------------------------------------------------------------------
-# Draw the actual page
+    if 'routes' not in st.session_state:
+        st.session_state['routes'] = []
 
-# Set the title that appears at the top of the page.
-'''
-# :earth_americas: GDP dashboard
+    # Fahrzeugdaten-Eingabe
+    st.write("### Neue Fahrzeugdaten eingeben")
+    name = st.text_input("Fahrzeug Name")
+    zul_gesamtgew = st.number_input("Zulässiges Gesamtgewicht [t]", min_value=0.0, format="%.0f", step=1.0)
+    max_zuladung = st.number_input("Maximale Zuladung [t]", min_value=0.0, format="%.0f", step=1.0)
+    kaufpreis = st.number_input("Kaufpreis [EUR]", min_value=0.0, format="%.0f", step=1.0)
+    progn_restwert = st.number_input("Prognostizierter Restwert [EUR]", min_value=0.0, format="%.0f", step=1.0)
+    gepl_laufzeit = st.number_input("Geplante Laufzeit [km oder Jahre]", min_value=0.0, format="%.0f", step=1.0)
+    versicherungskosten = st.number_input("Versicherungskosten [Jährlich]", min_value=0.0, format="%.0f", step=1.0)
+    kraftfahrzeugsteuer = st.number_input("Kraftfahrzeugsteuer [Jährlich]", min_value=0.0, format="%.0f", step=1.0)
+    wartungskosten = st.number_input("Wartungskosten [Jährlich]", min_value=0.0, format="%.0f", step=1.0)
+    mautkosten = st.number_input("Mautkosten [EUR]", min_value=0.0, format="%.0f", step=1.0)
 
-Browse GDP data from the [World Bank Open Data](https://data.worldbank.org/) website. As you'll
-notice, the data only goes to 2022 right now, and datapoints for certain years are often missing.
-But it's otherwise a great (and did I mention _free_?) source of data.
-'''
+    if st.button("Fahrzeugdaten speichern"):
+        vehicle_data = {
+            'vehicle_id': str(uuid.uuid4()),
+            'name': name,
+            'zul_gesamtgew': zul_gesamtgew,
+            'max_zuladung': max_zuladung,
+            'kaufpreis': kaufpreis,
+            'progn_restwert': progn_restwert,
+            'gepl_laufzeit': gepl_laufzeit,
+            'versicherungskosten': versicherungskosten,
+            'kraftfahrzeugsteuer': kraftfahrzeugsteuer,
+            'wartungskosten': wartungskosten,
+            'mautkosten': mautkosten,
+            'dgraph.type': 'Vehicle'
+        }
+        save_vehicle_to_session(vehicle_data)
+        st.success("Fahrzeugdaten temporär hinzugefügt!")
 
-# Add some spacing
-''
-''
+    # Anzeige gespeicherter Fahrzeuge
+    if 'vehicle_list' in st.session_state and st.session_state['vehicle_list']:
+        st.write("### Temporär gespeicherte Fahrzeugdaten")
+        df = pd.DataFrame(st.session_state['vehicle_list'])
+        df_display = df[['name', 'zul_gesamtgew', 'max_zuladung', 'kaufpreis', 'progn_restwert',
+                 'gepl_laufzeit', 'versicherungskosten', 'kraftfahrzeugsteuer', 'wartungskosten', 'mautkosten']]
 
-min_value = gdp_df['Year'].min()
-max_value = gdp_df['Year'].max()
+        # Spaltennamen anpassen
+        df_display.columns = [
+            "Name", 
+            "Zulässiges Gesamtgewicht", 
+            "Maximale Zuladung", 
+            "Kaufpreis", 
+            "Prognostizierter Restwert", 
+            "Geplante Laufzeit", 
+            "Versicherungskosten", 
+            "Kraftfahrzeugsteuer", 
+            "Wartungskosten", 
+            "Mautkosten"
+        ]
 
-from_year, to_year = st.slider(
-    'Which years are you interested in?',
-    min_value=min_value,
-    max_value=max_value,
-    value=[min_value, max_value])
-
-countries = gdp_df['Country Code'].unique()
-
-if not len(countries):
-    st.warning("Select at least one country")
-
-selected_countries = st.multiselect(
-    'Which countries would you like to view?',
-    countries,
-    ['DEU', 'FRA', 'GBR', 'BRA', 'MEX', 'JPN'])
-
-''
-''
-''
-
-# Filter the data
-filtered_gdp_df = gdp_df[
-    (gdp_df['Country Code'].isin(selected_countries))
-    & (gdp_df['Year'] <= to_year)
-    & (from_year <= gdp_df['Year'])
-]
-
-st.header('GDP over time', divider='gray')
-
-''
-
-st.line_chart(
-    filtered_gdp_df,
-    x='Year',
-    y='GDP',
-    color='Country Code',
-)
-
-''
-''
+        st.table(df_display)
 
 
-first_year = gdp_df[gdp_df['Year'] == from_year]
-last_year = gdp_df[gdp_df['Year'] == to_year]
+        for idx, row in df.iterrows():
+            if st.button(f"Löschen {row['name']}", key=f"delete_{idx}"):
+                delete_vehicle_from_session(idx)
+                st.rerun()
 
-st.header(f'GDP in {to_year}', divider='gray')
+    # Routendaten-Eingabe
+    st.write("### Routendaten eingeben")
+    if 'vehicle_list' in st.session_state and st.session_state['vehicle_list']:
+        vehicle_options = {vehicle['vehicle_id']: vehicle['name'] for vehicle in st.session_state['vehicle_list']}
+        selected_vehicle_id = st.selectbox("Fahrzeug auswählen", options=list(vehicle_options.keys()), format_func=lambda x: vehicle_options[x])
 
-''
+        km = st.number_input("Route [km]", min_value=0.0, step=1.0)
+        beladung = st.number_input("Beladung [t]", min_value=0.0, step=0.1)
+        verbrauch = st.number_input("Verbrauch [kWh/100 km]", min_value=0.0, step=0.1)
+        if st.button("Route hinzufügen"):
+            route_data = {
+                'vehicle_id': selected_vehicle_id,
+                'km': km,
+                'beladung': beladung,
+                'verbrauch': verbrauch,
+                'dgraph.type': 'Route'
+            }
+            save_route_to_session(route_data)
+            st.success("Routendaten temporär hinzugefügt!")
 
-cols = st.columns(4)
+    # Anzeige gespeicherter Routendaten
+    if 'routes' in st.session_state and st.session_state['routes']:
+        st.write("### Temporär gespeicherte Routendaten")
+        df_routes = pd.DataFrame(st.session_state['routes'])
+        st.table(df_routes)
 
-for i, country in enumerate(selected_countries):
-    col = cols[i % len(cols)]
-
-    with col:
-        first_gdp = first_year[first_year['Country Code'] == country]['GDP'].iat[0] / 1000000000
-        last_gdp = last_year[last_year['Country Code'] == country]['GDP'].iat[0] / 1000000000
-
-        if math.isnan(first_gdp):
-            growth = 'n/a'
-            delta_color = 'off'
-        else:
-            growth = f'{last_gdp / first_gdp:,.2f}x'
-            delta_color = 'normal'
-
-        st.metric(
-            label=f'{country} GDP',
-            value=f'{last_gdp:,.0f}B',
-            delta=growth,
-            delta_color=delta_color
-        )
+if __name__ == "__main__":
+    try:
+        run()
+    finally:
+        close_dgraph_client(client_stub)

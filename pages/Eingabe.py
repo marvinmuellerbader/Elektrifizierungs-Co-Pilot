@@ -17,7 +17,12 @@ import uuid
 # Setzt die Konfiguration der Seite mit Titel und Symbol
 st.set_page_config(page_title="Flottenelektrifizierung", page_icon="🚛", layout="wide")
 
+# Füge den Pfad zum Schema-Ordner zum Python-Pfad hinzu
+schema_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'schema'))
+sys.path.append(schema_path)
 
+# Importiere das Schema
+from schema.set_schema import set_schema
 
 # Initialisiert den Dgraph Client
 client_stub = pydgraph.DgraphClientStub('localhost:9080')
@@ -116,22 +121,24 @@ def run():
 
     # Routendaten-Eingabe
     st.write("## Routendaten")
+    vehicle_data = get_vehicle_data(client)
+    vehicle_names = {vehicle['uid']: vehicle['name'] for vehicle in vehicle_data}
     with st.form("route_data", clear_on_submit=False):
-        if st.session_state['vehicle_counter'] > 1:
-            selected_vehicle = st.number_input("Fahrzeugnummer", min_value=1, max_value=st.session_state['vehicle_counter']-1, step=1, key='selected_vehicle')
+        if vehicle_data:
+            selected_vehicle = st.selectbox("Fahrzeug auswählen", options=list(vehicle_names.keys()), format_func=lambda x: vehicle_names[x], key='selected_vehicle')
         else:
             st.write("Keine Fahrzeuge vorhanden. Bitte zuerst ein Fahrzeug hinzufügen.")
 
         km = st.number_input("Strecke [km]", min_value=0.0, format="%.0f", step=1.0, key='km')
         verbrauch = st.number_input("Verbrauch [l/100km]", min_value=0.0, format="%.0f", step=1.0, key='verbrauch')
         fahrleistung = st.number_input("Fahrleistung [Jährlich km]", min_value=0.0, format="%.0f", step=1.0, key='fahrleistung')
-        schichtzeiten = st.text_input("Schichtzeiten (konkrete Uhrzeiten oder Stunden)", value="", key='schichtzeiten')
+        schichtzeiten = st.number_input("Schichtzeiten (konkrete Uhrzeiten oder Stunden)", min_value=0.0, format="%.0f", step=1.0, key='schichtzeiten')
         standzeiten = st.number_input("Standzeiten am Depot [h]", min_value=0.0, format="%.0f", step=1.0, key='standzeiten')
         depot_standort = st.text_input("Depot Standort", value="", key='depot_standort')
 
         submit_route_data = st.form_submit_button("Routendaten speichern")
         if submit_route_data:
-            if st.session_state['vehicle_counter'] > 1:  # Speichere nur, wenn Fahrzeuge existieren
+            if vehicle_data:  # Speichere nur, wenn Fahrzeuge existieren
                 route_data = {
                     'route_number': st.session_state['route_counter'],  # Routennummer automatisch vergeben
                     'vehicle_number': selected_vehicle,  # Zugehörige Fahrzeugnummer
