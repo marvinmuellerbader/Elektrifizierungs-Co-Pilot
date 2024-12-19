@@ -9,7 +9,7 @@ import logging
 import uuid
 
 # Setzt die Konfiguration der Seite mit Titel und Symbol
-st.set_page_config(page_title="Flottenelektrifizierung", page_icon="🚻", layout="wide")
+st.set_page_config(page_title="Flottenelektrifizierung", page_icon="🚛", layout="wide")
 
 # Initialisiere den Dgraph Client mit Fehlerbehandlung
 def init_dgraph_client():
