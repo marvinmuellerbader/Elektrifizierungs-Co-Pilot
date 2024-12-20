@@ -1,0 +1,54 @@
+[
+    {
+        "vehicle_id": "2ed7fc36-0c7a-4ce5-88d3-fad1f224efcf",
+        "name": "Mercedes eActros",
+        "zul_gesamtgew": 40.0,
+        "max_zuladung": 30.0,
+        "kaufpreis": 110000.0,
+        "progn_restwert": 15000.0,
+        "gepl_laufzeit": 60000.0,
+        "versicherungskosten": 15000.0,
+        "kraftfahrzeugsteuer": 14000.0,
+        "wartungskosten": 24000.0,
+        "mautkosten": 2000.0
+    },
+    {
+        "vehicle_id": "04c4a3a4-d60c-4817-8532-b6846e3fe3de",
+        "name": "Mercedes eActros",
+        "zul_gesamtgew": 40.0,
+        "max_zuladung": 30.0,
+        "kaufpreis": 110000.0,
+        "progn_restwert": 15000.0,
+        "gepl_laufzeit": 60000.0,
+        "versicherungskosten": 15000.0,
+        "kraftfahrzeugsteuer": 14000.0,
+        "wartungskosten": 24000.0,
+        "mautkosten": 2000.0
+    },
+    {
+        "vehicle_id": "6ff6f81d-9290-4164-88fb-29c45be67bed",
+        "name": "Mercedes eActros",
+        "zul_gesamtgew": 0.0,
+        "max_zuladung": 0.0,
+        "kaufpreis": 0.0,
+        "progn_restwert": 0.0,
+        "gepl_laufzeit": 0.0,
+        "versicherungskosten": 0.0,
+        "kraftfahrzeugsteuer": 0.0,
+        "wartungskosten": 0.0,
+        "mautkosten": 0.0
+    },
+    {
+        "vehicle_id": "2ed53530-4709-4290-bb0e-19b9ae8c7872",
+        "name": "Mercedes eActros",
+        "zul_gesamtgew": 0.0,
+        "max_zuladung": 0.0,
+        "kaufpreis": 0.0,
+        "progn_restwert": 0.0,
+        "gepl_laufzeit": 0.0,
+        "versicherungskosten": 0.0,
+        "kraftfahrzeugsteuer": 0.0,
+        "wartungskosten": 0.0,
+        "mautkosten": 0.0
+    }
+]

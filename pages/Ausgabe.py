@@ -1,15 +1,6 @@
 import streamlit as st
 import pandas as pd
-import uuid
-import pydgraph
 from datetime import datetime
-
-# Initialize Dgraph client
-client_stub = pydgraph.DgraphClientStub.from_cloud(
-    "https://nameless-brook-610132.eu-central-1.aws.cloud.dgraph.io/graphql", 
-    "YzA0OGJlMDFkZGZhZjYzMjhjZmExYjhhOTg3M2ZjYWU="
-)
-client = pydgraph.DgraphClient(client_stub)
 
 def calculate_costs(vehicle, route):
     arbeitstage = 250
@@ -49,9 +40,40 @@ def calculate_costs(vehicle, route):
         "Diesel Kosten": ["-", f"{dieselpreis}", "€/l"],
         "Energiekosten": [f"{energiekosten_elkw:.2f}", f"{energiekosten_diesel:.2f} €", "€ pro Route"],
         "Wartungskosten": [f"{wartungs_kosten_elkw_route:.2f}", f"{wartungs_kosten_diese_route:.2f}", "€ pro Route"],
-        "Maut Kosten": ["-", f"{mautkosten:.2f}", "€ pro Route"],
+        "Mautkosten": ["-", f"{mautkosten:.2f}", "€ pro Route"],
         "Gesamtbetriebskosten pro Jahr": [f"{Gesamtbetriebskosten_ELkw:.2f}",f"{gesamtbetriebskosten_diesellkw:.2f}", "€ pro Route"]
     }
+
+def generate_analysis(vehicle, route, data):
+    st.write(f"### Fahrzeug: {vehicle['name']}")
+
+    # Datenübersicht
+    st.subheader("Datenübersicht")
+    st.write("#### Allgemeine Daten")
+    st.write(f"Name: {vehicle['name']}")
+    st.write(f"Route Länge: {route['km']} km")
+    st.write(f"Beladung: {route['beladung']} t")
+
+    # Fahrzeugkosten OPEX
+    st.subheader("Fahrzeugkosten (OPEX)")
+    opex_data = {
+        "Parameter": ["Energiekosten", "Wartungskosten", "Mautkosten"],
+        "E-Lkw": [
+            f"{data['Energiekosten'][0]}",
+            f"{data['Wartungskosten'][0]}",
+            f"{data['Mautkosten'][0]}"
+        ],
+        "Diesel-Lkw": [
+            f"{data['Energiekosten'][1]}",
+            f"{data['Wartungskosten'][1]}",
+            f"{data['Mautkosten'][1]}"
+        ]
+    }
+    st.table(pd.DataFrame(opex_data))
+
+    # Fahrzeugkosten CAPEX
+    st.subheader("Fahrzeugkosten (CAPEX)")
+    st.write("CAPEX-Daten kommen bald...")
 
 def show_routes():
     st.header("Routenanalyse")
@@ -74,20 +96,8 @@ def show_routes():
     if not all_data:
         st.write("Keine Routen gefunden.")
     else:
-        route_number = 1
         for vehicle, route, data in all_data:
-            st.write(f"#### Fahrzeug: {vehicle['name']} - Route: {route['km']} km")
-            st.write(f"#### Route {route_number}")
-            df = pd.DataFrame(data, index=["E-Lkw", "Diesel Lkw", "Einheiten"]).transpose()
-
-            def highlight_last_row(s):
-                is_last_row = s.name == 'Gesamtbetriebskosten pro Jahr'
-                return ['font-weight: bold; font-style: italic; color: #cce70c;' if is_last_row else '' for _ in s]
-
-            styled_df = df.style.apply(highlight_last_row, axis=1)
-            st.write(styled_df.to_html(escape=False), unsafe_allow_html=True)
-
-            route_number += 1
+            generate_analysis(vehicle, route, data)
 
 def run():
     st.set_page_config(page_title="Flottenelektrifizierung", page_icon="🚛")
