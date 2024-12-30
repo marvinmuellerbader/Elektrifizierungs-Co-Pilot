@@ -11,57 +11,91 @@ import psycopg2
 st.set_page_config(page_title="Flottenelektrifizierung", page_icon="🚛", layout="wide")
 
 # Verbindung zur PostgreSQL-Datenbank herstellen
-DATABASE_URL = os.environ.get('DATABASE_URL')
-conn = psycopg2.connect(DATABASE_URL, sslmode='require')
-cursor = conn.cursor()
+DATABASE_URL = "postgresql://postgres:supa23ABc456#@db.tucxdmfpxnciqafvqna.supabase.co:5432/postgres"
 
-# Tabelle für Fahrzeugdaten erstellen
-cursor.execute('''
-CREATE TABLE IF NOT EXISTS vehicles (
-    vehicle_id TEXT PRIMARY KEY,
-    name TEXT,
-    zul_gesamtgew REAL,
-    max_zuladung REAL,
-    kaufpreis REAL,
-    progn_restwert REAL,
-    gepl_laufzeit REAL,
-    versicherungskosten REAL,
-    kraftfahrzeugsteuer REAL,
-    wartungskosten REAL,
-    mautkosten REAL
-)
-''')
-conn.commit()
+try:
+    conn = psycopg2.connect(DATABASE_URL, sslmode="require")
+    cursor = conn.cursor()
+    print("Verbindung erfolgreich!")
+except psycopg2.OperationalError as e:
+    print("OperationalError:", e)
+    st.error("OperationalError: Verbindung zur Datenbank fehlgeschlagen.")
+except Exception as e:
+    print("Allgemeiner Fehler bei der Verbindung:", e)
+    st.error("Fehler: Verbindung zur Datenbank fehlgeschlagen.")
 
-# Tabelle für Routendaten erstellen
-cursor.execute('''
-CREATE TABLE IF NOT EXISTS routes (
-    route_id SERIAL PRIMARY KEY,
-    vehicle_id TEXT,
-    km REAL,
-    beladung REAL,
-    verbrauch REAL,
-    FOREIGN KEY (vehicle_id) REFERENCES vehicles (vehicle_id) ON DELETE CASCADE
-)
-''')
-conn.commit()
+# Tabelleninitialisierung
+try:
+    def initialize_db():
+        cursor.execute('''
+        CREATE TABLE IF NOT EXISTS vehicles (
+            vehicle_id TEXT PRIMARY KEY,
+            name TEXT,
+            zul_gesamtgew REAL,
+            max_zuladung REAL,
+            kaufpreis REAL,
+            progn_restwert REAL,
+            gepl_laufzeit REAL,
+            versicherungskosten REAL,
+            kraftfahrzeugsteuer REAL,
+            wartungskosten REAL,
+            mautkosten REAL
+        )
+        ''')
+        cursor.execute('''
+        CREATE TABLE IF NOT EXISTS routes (
+            route_id SERIAL PRIMARY KEY,
+            vehicle_id TEXT,
+            km REAL,
+            beladung REAL,
+            verbrauch REAL,
+            FOREIGN KEY (vehicle_id) REFERENCES vehicles (vehicle_id) ON DELETE CASCADE
+        )
+        ''')
+        conn.commit()
+
+    initialize_db()
+except Exception as e:
+    print("Fehler bei der Initialisierung der Datenbank:", e)
+    st.error("Fehler bei der Initialisierung der Datenbank: " + str(e))
 
 # Fahrzeugdaten in die Datenbank speichern
 def save_vehicle_to_db(vehicle_data):
-    cursor.execute('''
-    INSERT INTO vehicles (vehicle_id, name, zul_gesamtgew, max_zuladung, kaufpreis, progn_restwert, gepl_laufzeit, versicherungskosten, kraftfahrzeugsteuer, wartungskosten, mautkosten)
-    VALUES (%(vehicle_id)s, %(name)s, %(zul_gesamtgew)s, %(max_zuladung)s, %(kaufpreis)s, %(progn_restwert)s, %(gepl_laufzeit)s, %(versicherungskosten)s, %(kraftfahrzeugsteuer)s, %(wartungskosten)s, %(mautkosten)s)
-    ON CONFLICT (vehicle_id) DO NOTHING
-    ''', vehicle_data)
-    conn.commit()
+    try:
+        cursor.execute('''
+        INSERT INTO vehicles (vehicle_id, name, zul_gesamtgew, max_zuladung, kaufpreis, progn_restwert, gepl_laufzeit, versicherungskosten, kraftfahrzeugsteuer, wartungskosten, mautkosten)
+        VALUES (%(vehicle_id)s, %(name)s, %(zul_gesamtgew)s, %(max_zuladung)s, %(kaufpreis)s, %(progn_restwert)s, %(gepl_laufzeit)s, %(versicherungskosten)s, %(kraftfahrzeugsteuer)s, %(wartungskosten)s, %(mautkosten)s)
+        ON CONFLICT (vehicle_id) DO NOTHING
+        ''', vehicle_data)
+        conn.commit()
+    except Exception as e:
+        print("Fehler beim Speichern der Fahrzeugdaten:", e)
+        st.error("Fehler beim Speichern der Fahrzeugdaten: " + str(e))
 
 # Routendaten in die Datenbank speichern
 def save_route_to_db(route_data):
-    cursor.execute('''
-    INSERT INTO routes (vehicle_id, km, beladung, verbrauch)
-    VALUES (%(vehicle_id)s, %(km)s, %(beladung)s, %(verbrauch)s)
-    ''', route_data)
-    conn.commit()
+    try:
+        cursor.execute('''
+        INSERT INTO routes (vehicle_id, km, beladung, verbrauch)
+        VALUES (%(vehicle_id)s, %(km)s, %(beladung)s, %(verbrauch)s)
+        ''', route_data)
+        conn.commit()
+    except Exception as e:
+        print("Fehler beim Speichern der Routendaten:", e)
+        st.error("Fehler beim Speichern der Routendaten: " + str(e))
+
+# Verbindung schließen bei App-Stop
+import atexit
+
+def close_connection():
+    try:
+        cursor.close()
+        conn.close()
+        print("Datenbankverbindung geschlossen.")
+    except Exception as e:
+        print("Fehler beim Schließen der Verbindung:", e)
+
+atexit.register(close_connection)
 
 # Hauptfunktion der App
 def run():
